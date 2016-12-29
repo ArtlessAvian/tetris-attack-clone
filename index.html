@@ -18,8 +18,6 @@ html, body {
 <script src="gui/controller.js"></script>
 <script src="sound/soundplayer.js"></script>
 
-<script src="gui/screen.js"></script>
-
 <script src="gui/menu.js"></script>
 
 <script src="gui/game.js"></script>
@@ -40,7 +38,8 @@ var ctx = canvas.getContext("2d");
 /**
  * Other important global variables (e.g. time-keeping, environment)
  */
-var my_screen = new Menu();
+var my_screen = new Game(1);
+
 var TIME_STEP = 1.0 / 50; // Time-step. Measured in seconds.
 var total_elapsed_time = 0.0;
 var accumulator = 0.0;
@@ -72,7 +71,7 @@ function main() {
 	my_screen.draw(); // accumulator passed in as a partial frame. For Anti-A purposes
 }
 
-// Borrowed from http://stackoverflow.com/questions/1846599
+// Adapted from http://stackoverflow.com/questions/1846599
 function keydown_handler(key){
 
 	var keynum = window.event ? key.keyCode : key.which; // window.event = userIsIE
@@ -89,8 +88,15 @@ function keyup_handler(key){
 
 }
 
+function resizeHandler()
+{
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+
 window.addEventListener('keydown', keydown_handler, false);
 window.addEventListener('keyup', keyup_handler, false);
+window.addEventListener("resize", resizeHandler, false);
 
 var mainLooper = setInterval(main, TIME_STEP);
 

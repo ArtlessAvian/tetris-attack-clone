@@ -21,22 +21,15 @@ var DANK_MEMES_ENABLED = false; // oh baby!
 
 var Game = function(players) {
 
-	Screen.apply(this, []);
-
 	this.board_array = [];
-	this.player_to_board = [];
+	this.player_to_boardID = [];
 
 	for (var i = 0; i < players; i++) {
 		this.add_player();
 	}
 
-	this.activePlayers = 1;
 	this.ais = new Array();
 }
-
-// Inherit from Screen 
-Game.prototype = Object.create(Screen.prototype);
-Game.prototype.constructor = Game;
 
 Game.prototype.add_board = function() {
 
@@ -48,7 +41,7 @@ Game.prototype.add_board = function() {
 Game.prototype.add_player = function() {
 
 	var board = this.add_board();
-	this.player_to_board.push(board);
+	this.player_to_boardID.push(this.board_array.length-1);
 }
 
 Game.prototype.add_ai = function(aps) {
@@ -68,35 +61,27 @@ Game.prototype.draw = function(accumulator) {
 
 	// start with a screen clear
 	ctx.fillStyle = CANVAS_BACKGROUND_COLOR;
-	ctx.fillRect( 0 , 0 , window.innerWidth , window.innerHeight );
+	ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
 	
 	// For each board
-	for (var player = 0; player < this.board_array.length; player++){
+	for (var playerID = 0; playerID < this.board_array.length; playerID++) {
 
-		var current_board = this.board_array[player];
+		var current_board = this.board_array[playerID];
 
 		// Draw the board background.
-		b_c = this.get_board_coordinates(player);
+		var b_c = this.get_board_coordinates(playerID);
 
 		ctx.fillStyle = EMPTY_BLOCK_COLOR;
 		ctx.fillRect(b_c.left, b_c.top, b_c.length, b_c.height);
 
-		bot = b_c.top + b_c.height;
+		var bot = b_c.top + b_c.height;
 
-		block_height = b_c.height / BOARD_HEIGHT;
-		block_length = b_c.length / BOARD_LENGTH;
+		var block_height = b_c.height / BOARD_HEIGHT;
+		var block_length = b_c.length / BOARD_LENGTH;
 
 		// Get the board raise offset
 		var fractional_raise = current_board.fractional_raise;
 		//fractional_raise = 0;
-
-		// LOL remove me
-		if (current_board.has_lost) {
-			ctx.fillStyle = TEXT_COLOR;
-			ctx.font = b_c.height/12 + "px sans-serif";
-			ctx.textAlign = "center";
-			ctx.fillText("YOU LOST", b_c.left + b_c.length/2, b_c.top + b_c.height/2);
-		}
 
 		// Draw the blocks.
 		for (var row = 0; row < BOARD_HEIGHT; row++) {
@@ -104,11 +89,11 @@ Game.prototype.draw = function(accumulator) {
 				
 				if (!current_board.block[row][col].empty()) {
 					
-					var block = current_board.block[row][col].color;
+					var blockColor = current_board.block[row][col].color;
 					
 					// If the block is in clearing, we light it up!
 					if (current_board.block[row][col].get_state() == Block.StateEnum.CLEAR) {
-						block = block.replace("b", "f");
+						blockColor = blockColor.replace("b", "f");
 					}
 					
 					// Shift the block depending on how far it is into a fall.
@@ -116,7 +101,7 @@ Game.prototype.draw = function(accumulator) {
 					var relative_position = current_board.block[row][col].relative_position();
 					relative_position += fractional_raise;
 
-					ctx.fillStyle = block;
+					ctx.fillStyle = blockColor;
 					ctx.fillRect(
 						b_c.left + col * block_length,
 						bot - (row + 1 + relative_position) * block_height,
@@ -128,12 +113,12 @@ Game.prototype.draw = function(accumulator) {
 
 		// Draw to be inserted blocks
 		for (var col = 0; col < BOARD_LENGTH; col++) {
-			var block = current_board.raising_blocks[col].color;
-			block = block.replace("b", "8");
+			var blockColor = current_board.raising_blocks[col].color;
+			blockColor = blockColor.replace("b", "8");
 
 			var relative_position = fractional_raise;
 
-			ctx.fillStyle = block;
+			ctx.fillStyle = blockColor;
 			ctx.fillRect(
 				b_c.left + col * block_length,
 				bot - (relative_position) * block_height,
@@ -162,14 +147,18 @@ Game.prototype.draw = function(accumulator) {
 					bot - (current_board.cursor.y + fractional_raise + 1) * block_height - cursor_width / 2,
 					block_length * 2 + cursor_width, block_height + cursor_width);
 
+
+		// Nonessentials
 		// Board IDer
 		ctx.textAlign = "start";
 		ctx.fillStyle = TEXT_COLOR;
 		ctx.font = b_c.height/30 + "px sans-serif";
-		ctx.fillText("Player " + (player + 1), b_c.left, b_c.top + b_c.height + b_c.height/30);
+		ctx.fillText("Player " + (playerID + 1), b_c.left, b_c.top + b_c.height + b_c.height/30);
 
 		// Stop! HAMMERTIME
 		ctx.fillText(Math.floor(current_board.clear_lag * 100)/100 + "", b_c.left + b_c.length/30, b_c.top + b_c.height/30);
+		ctx.fillText(current_board.death_grace + "", b_c.left + b_c.length/30, b_c.top + 2 * b_c.height/30);
+		ctx.fillText(Math.floor(current_board.fractional_raise * 100)/100 + "", b_c.left + b_c.length/30, b_c.top + 3 * b_c.height/30);
 
 		// Fun facts!
 		ctx.font = b_c.height/60 + "px sans-serif";
@@ -178,8 +167,6 @@ Game.prototype.draw = function(accumulator) {
 		var efficiency = current_board.total_blocks / current_board.total_moves;
 		ctx.fillText("Efficiency!", b_c.left + b_c.length, b_c.top + b_c.height + b_c.height/60);
 
-		// TODO: Do some stuff with color to make players feel bad
-		// ctx.fillStyle = "#E6DDAC";
 		ctx.fillText(Math.round(efficiency*1000)/1000 + " blocks / move", b_c.left + b_c.length, b_c.top + b_c.height + b_c.height/30);
 	}	
 }
@@ -190,24 +177,24 @@ Game.prototype.draw = function(accumulator) {
 Game.prototype.get_board_coordinates = function(player) {
 	
 	// First, find the exact center of the screen!
-	center = {"x": window.innerWidth / 2, "y": window.innerHeight / 2}
+	var center = {"x": window.innerWidth / 2, "y": window.innerHeight / 2}
 	
 	// Now, find the biggest box dimensions that can fit.        \/\/\/\/ This can probably be simplified
 	if (window.innerHeight / window.innerWidth < BOARD_HEIGHT / (this.board_array.length * BOARD_LENGTH + (this.board_array.length - 1) * BOARD_SPACING)) // Limited by screen height.
 	{
-		box_height = window.innerHeight * 0.9;
-		box_length = box_height / BOARD_HEIGHT * BOARD_LENGTH;
+		var box_height = window.innerHeight * 0.9;
+		var box_length = box_height / BOARD_HEIGHT * BOARD_LENGTH;
 	} else {
 
 		// TODO: Fingers weak, code's spaghetti
-		box_length = window.innerWidth / (this.board_array.length + (this.board_array.length - 1) * BOARD_SPACING/BOARD_LENGTH) * 0.9;
-		box_height = box_length / BOARD_LENGTH * BOARD_HEIGHT;
+		var box_length = window.innerWidth / (this.board_array.length + (this.board_array.length - 1) * BOARD_SPACING/BOARD_LENGTH) * 0.9;
+		var box_height = box_length / BOARD_LENGTH * BOARD_HEIGHT;
 	}
 	
 	// Return JSON object containing proper canvas coordinates to draw board.
 	return {
-		"left": center.x - (this.board_array.length * box_length + (this.board_array.length - 1) * box_length * BOARD_SPACING / BOARD_LENGTH) / 2 // Goto very left
-		      + player * (box_length + box_length * BOARD_SPACING / BOARD_LENGTH), // Offset for player
+		"left": (center.x - (this.board_array.length * box_length + (this.board_array.length - 1) * box_length * BOARD_SPACING / BOARD_LENGTH) / 2)
+		      + (player * (box_length + box_length * BOARD_SPACING / BOARD_LENGTH)),
 		"top" : center.y - box_height / 2,
 		"length" : box_length,
 		"height" : box_height
@@ -229,16 +216,16 @@ Game.prototype.keydown_handler = function(key, meaning) {
 	// Calls function bound to key
 	// TODO: Rising and switching are spammable again, sorry.
 
-	split = meaning.split(".");
+	var split = meaning.split(".");
 
 	if (split[0] === "player")
 	{
-		splitAgain = split[1].split("_");
+		var splitAgain = split[1].split("_");
 
 		var num = 1 * splitAgain[0];
-		if (num > this.player_to_board.length) {return;}
+		if (num > this.player_to_boardID.length) {return;}
 
-		board = this.player_to_board[num];
+		var board = this.board_array[this.player_to_boardID[num]];
 
 		if (splitAgain[1] === "up") {board.upInput();}
 		else if (splitAgain[1] === "down") {board.downInput();}
@@ -261,6 +248,7 @@ Game.prototype.keyup_handler = function(key, meaning) {
 /**
  * Advance the game timer forward a tick! Not much to see here ... yet!
  */
+
 Game.prototype.update = function(dt) {
 
 	for (var i = 0; i < this.board_array.length; i++) {

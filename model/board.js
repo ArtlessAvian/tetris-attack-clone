@@ -6,7 +6,7 @@ var Board = function(board_number) {
 	this.WIDTH = BOARD_LENGTH;
 	
 	this.block = matrix_make(this.HEIGHT, this.WIDTH, EMPTY_BLOCK);
-	this.raising_blocks = this.genNextRow(); // That grammar though
+	this.raising_blocks = this.genNextRow();
 
 	this.cursor = { "x" : 2, "y" : -1 };
 
@@ -29,7 +29,7 @@ var Board = function(board_number) {
 
 	this.current_chain = 1;
 
-	// Stats!
+	// Stats
 	this.highest_chain = 0;
 	this.total_clears = 0;
 	this.total_blocks = 0;
@@ -38,12 +38,12 @@ var Board = function(board_number) {
 	this.board_number = board_number;
 }
 
-Board.prototype.toString = function() {
+// Board.prototype.toString = function() {
 
-	// Used for hashing boards
-	// TODO: use actual hash
-	return this.board_number;
-}
+// 	// Used for hashing boards
+// 	// TODO: use actual hash
+// 	return this.board_number;
+// }
 
 /**
  * A mostly-arbitrarily ordered sequence of steps to advance the board to the next tick.
@@ -82,6 +82,7 @@ Board.prototype.update = function(dt) {
 		}
 	}
 	
+	// Update all block timers
 	for (var i = 0; i < this.HEIGHT; i++) {
 		for (var j = 0; j < this.WIDTH; j++) {
 			this.block[i][j].update_timer(dt); // Only one instance of update timer is allowed !!!
@@ -311,12 +312,14 @@ Board.prototype.trueRaise = function() {
 	}
 
 	// Give grace period when about to lose!
-	for (var j = 0; j < this.WIDTH; j++) {
-		if (!this.block[this.HEIGHT - 1][j].empty()) {
-			this.clear_lag = 2;
-			this.death_grace = true;
-			break;
-		}
+	if (!this.isRowEmpty(this.HEIGHT-1)) {
+		this.clear_lag = 2;
+		this.death_grace = true;
+		this.fractional_raise = 0;
+	}
+	else
+	{
+		this.fractional_raise--;
 	}
 
 	// Add new blocks to the front
@@ -334,74 +337,83 @@ Board.prototype.trueRaise = function() {
 
 Board.prototype.raise = function(dt) {
 
-	this.autoraise_speed += this.autoraise_acceleration * dt;
-
 	if (this.force_raise) {
 		this.fractional_raise += dt * FORCE_RAISE_SPEED;
 	}
-	else if (this.has_lost)
-	{
-		this.has_lost += dt;
-		this.fractional_raise -= dt * this.HEIGHT / 5;
-	}
-	else {
-
-		if (!this.clearing) {
-			// Auto raise board
-			if (this.clear_lag > 0) {
-				this.clear_lag -= dt;
-				if (this.clear_lag < 0) {
-					this.fractional_raise += -this.clear_lag * this.autoraise_speed;
-					this.clear_lag = 0;
-				}
+	else if (!this.clearing) {
+		if (this.clear_lag > 0) {
+			// decrement clear_lag
+			this.clear_lag -= dt;
+			if (this.clear_lag < 0) {
+				// fix extra clear lag
+				this.fractional_raise += -this.clear_lag * this.autoraise_speed;
+				this.clear_lag = 0;
 			}
-			else {
-				this.fractional_raise += dt * this.autoraise_speed;
-			}
+		}
+		else {
+			// raise board
+			this.fractional_raise += dt * this.autoraise_speed;
+			this.fractional_raise += dt * dt/2 * this.autoraise_acceleration;
 		}
 	}	
 
-	while (this.fractional_raise > 1) {
+	while (this.fractional_raise >= 1) {
 		this.trueRaise();
 
-		this.fractional_raise--;
 		this.force_raise = false;
 	}
-
-	// Hey
 
 	if (this.death_grace) {
 
 		// Check for a loss.
-		if (this.clear_lag == 0) {
+		if (this.clear_lag <= 0) {
 			console.log("BOARD #" + this.board_number + " " + "You lose!!");
-			this.has_lost = 0.0001;
 			this.death_grace = false;
 		}
 		else {
-			var all_empty = true;
-			for (var j = 0; j < this.WIDTH; j++) {
-				if (!this.block[this.HEIGHT - 1][j].empty()) {
-					all_empty = false;
-				}
-			}
-			if (all_empty)
+			if (this.isRowEmpty(this.HEIGHT-1))
 			{
+				// Reset to not dying
 				this.death_grace = false;
 				this.clear_lag = 0;
 			}
 		}
 	}
 
-	// Dont put the cursor above the board
-	if (this.cursor.y + 1 >= this.HEIGHT && !this.death_grace) {
+	// Move the cursor off the top of the board
+	if (this.cursor.y + 1 >= this.HEIGHT && (!this.death_grace || this.clear_lag <= 0)) {
 		this.cursor.y -= 1;
 	}
+
+	this.autoraise_speed += this.autoraise_acceleration * dt;
+}
+
+Board.prototype.isRowEmpty = function(row)
+{
+	for (var j = 0; j < this.WIDTH; j++) {
+		if (!this.block[row][j].empty()) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+Board.prototype.isRowFull = function(row)
+{
+	for (var j = 0; j < this.WIDTH; j++) {
+		if (this.block[row][j].empty()) {
+			return false;
+		}
+	}
+
+	return true;
 }
 
 Board.prototype.upInput = function() {
 
-	if (this.cursor.y + 1 < this.HEIGHT - 1 || (this.death_grace && this.cursor.y < this.HEIGHT - 1)) {
+	if (this.cursor.y + 1 < this.HEIGHT - 1 || 
+		((this.death_grace || this.clear_lag < 0) && this.cursor.y < this.HEIGHT - 1)) {
 		this.cursor.y += 1;
 		this.total_moves++;
 		if (!this.has_lost) { SoundPlayer.play_move(); }

@@ -59,20 +59,13 @@ Ai.prototype.get_instructions = function() {
 	// For every row
 	for (var row = 0; row <= BOARD_HEIGHT* 2/3; row++) {
 		// Check if row is completely empty
-		for (var column = 0; column < BOARD_LENGTH; column++) {
-			if (!this.board.block[row][column].empty())
-			{
-				break;
-			}
-		}
-		// Completion of previous loop ==> row is empty
-		if (column >= BOARD_LENGTH) {
+		if (this.board.isRowEmpty(row)) {
 			this.input_queue.push("raise");
 		}
 	}
 
-	var target_x = Math.random() * (BOARD_LENGTH-2);
-	var target_y = Math.random() * (BOARD_HEIGHT-1);
+	var target_x = Math.floor(Math.random() * (BOARD_LENGTH-2));
+	var target_y = Math.floor(Math.random() * (BOARD_HEIGHT-1));
 
 	for (var x = this.board.cursor.x; x < target_x; x++) {
 		this.input_queue.push("right");
@@ -89,14 +82,14 @@ Ai.prototype.get_instructions = function() {
 
 	// Shuffle inputs (looks neat, but is a bad idea for what Im trying to implement)
 
-	for (var i = this.input_queue.length - 1; i >= 0; i--) {
+	// for (var i = this.input_queue.length - 1; i >= 0; i--) {
 
-		var j = Math.floor(Math.random() * (i+1));
+	// 	var j = Math.floor(Math.random() * (i+1));
 
-		var k = this.input_queue[i];
-		this.input_queue[i] = this.input_queue[j];
-		this.input_queue[j] = k;
-	}
+	// 	var k = this.input_queue[i];
+	// 	this.input_queue[i] = this.input_queue[j];
+	// 	this.input_queue[j] = k;
+	// }
 
 	this.input_queue.push("switch");
 }
