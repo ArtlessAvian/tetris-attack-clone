@@ -5,7 +5,7 @@ var Board = function(board_number) {
 	this.HEIGHT = BOARD_HEIGHT;
 	this.WIDTH = BOARD_LENGTH;
 	
-	this.block = matrix_make(this.HEIGHT, this.WIDTH, EMPTY_BLOCK);
+	this.blockMatrix = matrix_make(this.HEIGHT, this.WIDTH, EMPTY_BLOCK);
 	this.raising_blocks = this.genNextRow();
 
 	this.cursor = { "x" : 2, "y" : -1 };
@@ -25,7 +25,7 @@ var Board = function(board_number) {
 	this.fractional_raise = 0;
 
 	this.death_grace = false;
-	this.has_lost = 0; // Seconds from lose
+	this.DEATH_GRACE_PERIOD = 2;
 
 	this.current_chain = 1;
 
@@ -59,20 +59,21 @@ Board.prototype.update = function(dt) {
 	this.checkClear();
 	
 	// We need to clear blocks as well. This could be done in a function probably.
-	for (var i = 0; i < this.HEIGHT; i++) {
-		for (var j = 0; j < this.WIDTH; j++) {
+	for (var row = 0; row < this.HEIGHT; row++) {
+		for (var col = 0; col < this.WIDTH; col++) {
 			
-			if (this.block[i][j].get_state() == Block.StateEnum.CLEAR && this.block[i][j].state_timer <= 0) {
+			if (this.blockMatrix[row][col].get_state() == Block.StateEnum.CLEAR && this.blockMatrix[row][col].state_timer <= 0) {
 				
 				// This block is marked for clearance!
-				this.block[i][j] = EMPTY_BLOCK;
+				// TODO: Pool old block
+				this.blockMatrix[row][col] = EMPTY_BLOCK;
 				
 				// Every block above it is now chain material!
-				for (var x = i; x < this.HEIGHT; x++) {
-					if (!this.block[x][j].empty()) {
-						this.block[x][j].chain_material = true;
-						if (this.block[x][j].get_state() == Block.StateEnum.REST) {
-							this.block[x][j].set_state(Block.StateEnum.FLOAT, true);
+				for (var x = row; x < this.HEIGHT; x++) {
+					if (!this.blockMatrix[x][col].empty()) {
+						this.blockMatrix[x][col].chain_material = true;
+						if (this.blockMatrix[x][col].get_state() == Block.StateEnum.REST) {
+							this.blockMatrix[x][col].set_state(Block.StateEnum.FLOAT, true);
 						}
 					}
 				}
@@ -83,9 +84,9 @@ Board.prototype.update = function(dt) {
 	}
 	
 	// Update all block timers
-	for (var i = 0; i < this.HEIGHT; i++) {
-		for (var j = 0; j < this.WIDTH; j++) {
-			this.block[i][j].update_timer(dt); // Only one instance of update timer is allowed !!!
+	for (var row = 0; row < this.HEIGHT; row++) {
+		for (var col = 0; col < this.WIDTH; col++) {
+			this.blockMatrix[row][col].update_timer(dt); // Only one instance of update timer is allowed !!!
 		}
 	}
 }
@@ -93,12 +94,12 @@ Board.prototype.update = function(dt) {
 Board.prototype.swap = function() {
 		
 	if (this.swappable(this.cursor.x, this.cursor.y)) {
-		temp = this.block[this.cursor.y][this.cursor.x];
-		this.block[this.cursor.y][this.cursor.x] = this.block[this.cursor.y][this.cursor.x + 1];
-		this.block[this.cursor.y][this.cursor.x + 1] = temp;
+		temp = this.blockMatrix[this.cursor.y][this.cursor.x];
+		this.blockMatrix[this.cursor.y][this.cursor.x] = this.blockMatrix[this.cursor.y][this.cursor.x + 1];
+		this.blockMatrix[this.cursor.y][this.cursor.x + 1] = temp;
 		
-		this.block[this.cursor.y][this.cursor.x].chain_material = false;
-		this.block[this.cursor.y][this.cursor.x + 1].chain_material = false;
+		this.blockMatrix[this.cursor.y][this.cursor.x].chain_material = false;
+		this.blockMatrix[this.cursor.y][this.cursor.x + 1].chain_material = false;
 		
 		SoundPlayer.play_swap();
 	}
@@ -106,8 +107,8 @@ Board.prototype.swap = function() {
 
 Board.prototype.swappable = function(x, y) {
 	
-	var blockA = this.block[y][x];
-	var blockB = this.block[y][x + 1];
+	var blockA = this.blockMatrix[y][x];
+	var blockB = this.blockMatrix[y][x + 1];
 	
 	var initial_conditions = (blockA.isSwappable() &&
 		blockB.isSwappable() &&
@@ -119,8 +120,8 @@ Board.prototype.swappable = function(x, y) {
 		if (y == this.HEIGHT - 1) {
 			return true;
 		} else {
-			return ((this.block[y + 1][x].relative_position() >= 0) &&
-				(this.block[y + 1][x + 1].relative_position() >= 0));
+			return ((this.blockMatrix[y + 1][x].relative_position() >= 0) &&
+				(this.blockMatrix[y + 1][x + 1].relative_position() >= 0));
 		}
 	}
 	return false;
@@ -129,26 +130,27 @@ Board.prototype.swappable = function(x, y) {
 
 Board.prototype.checkClear = function() {
 	
-	clear_found = false;
-	chain_found = false;
+	var clear_found = false;
+	var chain_found = false;
 	
 	// Check for horizontal clears.
+	// TODO: Keep object for reuse
 	var h = matrix_make(this.HEIGHT, this.WIDTH, 1);
-	for (var i = 0; i < this.HEIGHT; i++) {
-		h[i] = identify_matches(count_consecutive_matches(this.block[i], Block.isMatch), 3);
+	for (var row = 0; row < this.HEIGHT; row++) {
+		h[row] = identify_matches(count_consecutive_matches(this.blockMatrix[row], Block.isMatch), 3);
 	}
 	
 	// Check for vertical clears.
 	var v = matrix_make(this.WIDTH, this.HEIGHT, 1); // Tricky! this one is rotated
-	for (var j = 0; j < this.WIDTH; j++) {
+	for (var col = 0; col < this.WIDTH; col++) {
 		
-		var my_array = new Array(this.HEIGHT);
+		var colSlice = new Array(this.HEIGHT);
 		
-		for (var i = 0; i < this.HEIGHT; i++) {
-			my_array[i] = this.block[i][j];
+		for (var row = 0; row < this.HEIGHT; row++) {
+			colSlice[row] = this.blockMatrix[row][col];
 		}
 		
-		v[j] = identify_matches(count_consecutive_matches(my_array, Block.isMatch), 3);
+		v[col] = identify_matches(count_consecutive_matches(colSlice, Block.isMatch), 3);
 		
 	}
 	
@@ -156,13 +158,13 @@ Board.prototype.checkClear = function() {
 	for (var row = 0; row < this.HEIGHT; row++) {
 		for (var col = 0; col < this.WIDTH; col++) {
 			
-			if (h[row][col] == true || v[col][row] == true) {
+			if (h[row][col] || v[col][row]) {
 				clear_found = true;
 				this.total_blocks++;
-				if (this.block[row][col].chain_material) {
+				if (this.blockMatrix[row][col].chain_material) {
 					chain_found = true;
 				}
-				this.block[row][col].set_state(Block.StateEnum.CLEAR);
+				this.blockMatrix[row][col].set_state(Block.StateEnum.CLEAR);
 			}
 			
 		}
@@ -189,10 +191,10 @@ Board.prototype.checkClear = function() {
 	var non_rests = 0;
 	for (var row = 0; row < this.HEIGHT; row++) {
 		for (var col = 0; col < this.WIDTH; col++) {
-			if (this.block[row][col].get_state() == Block.StateEnum.REST) {
-				this.block[row][col].chain_material = false;
+			if (this.blockMatrix[row][col].get_state() == Block.StateEnum.REST) {
+				this.blockMatrix[row][col].chain_material = false;
 			} else {
-				if (!this.block[row][col].empty()) { non_rests += 1; }
+				if (!this.blockMatrix[row][col].empty()) { non_rests += 1; }
 			}
 		}
 	}
@@ -219,44 +221,48 @@ Board.prototype.fall = function() {
 	for (var row = 0; row < this.HEIGHT; row++) { // Bottom to top
 		for (var col = 0; col < this.WIDTH; col++) { // Left to right
 			
+			var currentBlock = this.blockMatrix[row][col];
+
 			// STEP 1:
-			if (this.block[row][col].get_state() == Block.StateEnum.REST) {
-				if (row > 0 && !this.block[row - 1][col].isSupportive()) {
+			if (currentBlock.get_state() == Block.StateEnum.REST) {
+				if (row > 0 && !this.blockMatrix[row - 1][col].isSupportive()) {
 					for (var x = row; x < this.HEIGHT; x++) {
-						if (this.block[x][col].get_state() == Block.StateEnum.REST) {
-							this.block[x][col].set_state(Block.StateEnum.FLOAT);
+						if (this.blockMatrix[x][col].get_state() == Block.StateEnum.REST) {
+							this.blockMatrix[x][col].set_state(Block.StateEnum.FLOAT);
 						}
 					}
 				}
 			}
 			
 			// STEP 2:
-			if (this.block[row][col].get_state() == Block.StateEnum.FLOAT) {
-				if (this.block[row][col].state_timer == 0) {
-					this.block[row][col].set_state(Block.StateEnum.FALL);
+			if (currentBlock.get_state() == Block.StateEnum.FLOAT) {
+				if (currentBlock.state_timer == 0) {
+					currentBlock.set_state(Block.StateEnum.FALL);
 				}
 			}
 			
 			// STEP 3:
-			if (this.block[row][col].get_state() == Block.StateEnum.FALL) {
-				if (row == 0 || this.block[row - 1][col].isSupportive()) {
-					if (this.block[row][col].relative_position() - (TIME_STEP * DROP_SPEED) <= 0.0) {
+			if (currentBlock.get_state() == Block.StateEnum.FALL) {
+				if (row == 0 || this.blockMatrix[row - 1][col].isSupportive()) {
+					if (currentBlock.relative_position() - (TIME_STEP * DROP_SPEED) <= 0.0) {
 						// Trying to anticipate block-clipping
-						this.block[row][col].set_state(Block.StateEnum.REST);
+						currentBlock.set_state(Block.StateEnum.REST);
 					}
 				} else {
-					if (this.block[row][col].state_timer == 0) {
+					if (currentBlock.state_timer == 0) {
 						// Move block down one.
-						this.block[row - 1][col] = this.block[row][col];
-						this.block[row][col] = EMPTY_BLOCK;
+						this.blockMatrix[row - 1][col] = currentBlock;
+						this.blockMatrix[row][col] = EMPTY_BLOCK;
 						// Determine and set new state
 						/*
-						if (row - 1 == 0 || this.block[row - 2][col].isSupportive()) {
-							this.block[row - 1][col].set_state(Block.StateEnum.REST);
+						if (row - 1 == 0 || this.blockMatrix[row - 2][col].isSupportive()) {
+							this.blockMatrix[row - 1][col].set_state(Block.StateEnum.REST);
 						} else {
-							this.block[row - 1][col].set_state(Block.StateEnum.FALL);
+							this.blockMatrix[row - 1][col].set_state(Block.StateEnum.FALL);
 						}*/
-						this.block[row - 1][col].set_state(Block.StateEnum.FALL);
+
+						// TODO: See if commenting this out causes errors
+						this.blockMatrix[row - 1][col].set_state(Block.StateEnum.FALL);
 					}
 				}
 			}
@@ -268,21 +274,25 @@ Board.prototype.fall = function() {
 
 Board.prototype.genNextRow = function() {
 
+	// TODO: Not all sets of colors are equally likely?
+	// (who cares)
+
 	var next_row = [];
 	
-	for (var j = 0; j < this.WIDTH; j++) {
+	for (var col = 0; col < this.WIDTH; col++) {
+
 		var possible_colors = new Array();
-		for (color in BLOCK_COLORS) {
+		for (var color in BLOCK_COLORS) {
 			var color_ok = true;
 			// See if color would cause a clear.
-			if (this.block[1][j].color == this.block[0][j].color) {
-				if (BLOCK_COLORS[color] == this.block[1][j].color) {
+			if (this.blockMatrix[1][col].color == this.blockMatrix[0][col].color) {
+				if (BLOCK_COLORS[color] == this.blockMatrix[1][col].color) {
 					color_ok = false;
 				}
 			}
-			if (j >= 2) {
-				if (next_row[j - 2].color == next_row[j - 1].color) {
-					if (BLOCK_COLORS[color] == next_row[j - 1].color) {
+			if (col >= 2) {
+				if (next_row[col - 2].color == next_row[col - 1].color) {
+					if (BLOCK_COLORS[color] == next_row[col - 1].color) {
 						color_ok = false;
 					}
 				}
@@ -291,10 +301,11 @@ Board.prototype.genNextRow = function() {
 				possible_colors.push(BLOCK_COLORS[color]);
 			}
 		}
+
 		if (possible_colors.length == 0) {
-			next_row[j] = Block.random();
+			next_row[col] = Block.random();
 		} else {
-			next_row[j] = new Block(possible_colors);
+			next_row[col] = new Block(possible_colors);
 		}
 	}
 
@@ -303,17 +314,18 @@ Board.prototype.genNextRow = function() {
 
 Board.prototype.trueRaise = function() {
 
+	// TODO: Pool topmost blocks
 	// Shift every block up
-	for (var i = this.HEIGHT - 2; i >= 0; i--) {
-		for (var j = 0; j < this.WIDTH; j++) {
-			this.block[i + 1][j] = this.block[i][j];
-			this.block[i][j] = EMPTY_BLOCK;
+	for (var row = this.HEIGHT - 2; row >= 0; row--) {
+		for (var col = 0; col < this.WIDTH; col++) {
+			this.blockMatrix[row + 1][col] = this.blockMatrix[row][col];
+			this.blockMatrix[row][col] = EMPTY_BLOCK;
 		}
 	}
 
 	// Give grace period when about to lose!
 	if (!this.isRowEmpty(this.HEIGHT-1)) {
-		this.clear_lag = 2;
+		this.clear_lag = this.DEATH_GRACE_PERIOD;
 		this.death_grace = true;
 		this.fractional_raise = 0;
 	}
@@ -323,13 +335,13 @@ Board.prototype.trueRaise = function() {
 	}
 
 	// Add new blocks to the front
-	for (var j = 0; j < this.WIDTH; j++)
+	for (var col = 0; col < this.WIDTH; col++)
 	{
-		this.block[0][j] = this.raising_blocks[j];
+		this.blockMatrix[0][col] = this.raising_blocks[col];
 	}
-	this.raising_blocks = this.genNextRow();
+	this.raising_blocks = this.genNextRow(false);
 
-	// Move the cursor up one
+	// Move the cursor up one if it doesnt go above the board
 	if (this.cursor.y + 1 < this.HEIGHT) {
 		this.cursor.y += 1;
 	}
@@ -391,7 +403,7 @@ Board.prototype.raise = function(dt) {
 Board.prototype.isRowEmpty = function(row)
 {
 	for (var j = 0; j < this.WIDTH; j++) {
-		if (!this.block[row][j].empty()) {
+		if (!this.blockMatrix[row][j].empty()) {
 			return false;
 		}
 	}
@@ -402,7 +414,7 @@ Board.prototype.isRowEmpty = function(row)
 Board.prototype.isRowFull = function(row)
 {
 	for (var j = 0; j < this.WIDTH; j++) {
-		if (this.block[row][j].empty()) {
+		if (this.blockMatrix[row][j].empty()) {
 			return false;
 		}
 	}
@@ -416,7 +428,7 @@ Board.prototype.upInput = function() {
 		((this.death_grace || this.clear_lag < 0) && this.cursor.y < this.HEIGHT - 1)) {
 		this.cursor.y += 1;
 		this.total_moves++;
-		if (!this.has_lost) { SoundPlayer.play_move(); }
+		SoundPlayer.play_move();
 	}
 }
 
@@ -425,7 +437,7 @@ Board.prototype.downInput = function() {
 	if (this.cursor.y > 0) {
 		this.cursor.y -= 1;
 		this.total_moves++;
-		if (!this.has_lost) { SoundPlayer.play_move(); }
+		SoundPlayer.play_move();
 	}
 }
 
@@ -434,7 +446,7 @@ Board.prototype.leftInput = function() {
 	if (this.cursor.x > 0) {
 		this.cursor.x -= 1;
 		this.total_moves++;
-		if (!this.has_lost) { SoundPlayer.play_move(); }
+		SoundPlayer.play_move();
 	}
 }
 
@@ -443,11 +455,11 @@ Board.prototype.rightInput = function() {
 	if (this.cursor.x < BOARD_LENGTH - 2) {
 		this.cursor.x += 1;
 		this.total_moves++;
-		if (!this.has_lost) { SoundPlayer.play_move(); }
+		SoundPlayer.play_move();
 	}
 }
 
-Board.prototype.switchInput = function() {
+Board.prototype.swapInput = function() {
 
 	if (this != undefined) {
 		this.swap();

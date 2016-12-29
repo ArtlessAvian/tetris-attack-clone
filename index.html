@@ -68,7 +68,7 @@ function main() {
         accumulator -= TIME_STEP;
     }
 
-	my_screen.draw(); // accumulator passed in as a partial frame. For Anti-A purposes
+	my_screen.draw(accumulator); // accumulator passed in as a partial frame. For Anti-A purposes
 }
 
 // Adapted from http://stackoverflow.com/questions/1846599
@@ -100,12 +100,12 @@ window.addEventListener("resize", resizeHandler, false);
 
 var mainLooper = setInterval(main, TIME_STEP);
 
-console.log("Looking for console commands?");
-console.log("Try my_screen.new_board(x, y)");
+console.info("Looking for console commands?");
+console.info("Try new_board(x, y)");
 
-console.log ("Looking for really inept bots to play against?");
-console.log ("Try my_screen.add_ai(actionsPerSecond)");
-console.log ("You also might want to turn your volume down.");
+console.info("Looking for really inept bots to play against?");
+console.info("Try my_screen.add_ai(actionsPerSecond)");
+console.info("You also might want to turn your volume down.");
 
 var new_board = function(x, y) {
 	BOARD_HEIGHT = y;

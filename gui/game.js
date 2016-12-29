@@ -87,18 +87,18 @@ Game.prototype.draw = function(accumulator) {
 		for (var row = 0; row < BOARD_HEIGHT; row++) {
 			for (var col = 0; col < BOARD_LENGTH; col++) {
 				
-				if (!current_board.block[row][col].empty()) {
+				if (!current_board.blockMatrix[row][col].empty()) {
 					
-					var blockColor = current_board.block[row][col].color;
+					var blockColor = current_board.blockMatrix[row][col].color;
 					
 					// If the block is in clearing, we light it up!
-					if (current_board.block[row][col].get_state() == Block.StateEnum.CLEAR) {
+					if (current_board.blockMatrix[row][col].get_state() == Block.StateEnum.CLEAR) {
 						blockColor = blockColor.replace("b", "f");
 					}
 					
 					// Shift the block depending on how far it is into a fall.
 					// Then, shift the block based on the autoraise of the board.
-					var relative_position = current_board.block[row][col].relative_position();
+					var relative_position = current_board.blockMatrix[row][col].relative_position();
 					relative_position += fractional_raise;
 
 					ctx.fillStyle = blockColor;
@@ -177,7 +177,8 @@ Game.prototype.draw = function(accumulator) {
 Game.prototype.get_board_coordinates = function(player) {
 	
 	// First, find the exact center of the screen!
-	var center = {"x": window.innerWidth / 2, "y": window.innerHeight / 2}
+	var centerX = window.innerWidth / 2;
+	var centerY = window.innerHeight / 2;
 	
 	// Now, find the biggest box dimensions that can fit.        \/\/\/\/ This can probably be simplified
 	if (window.innerHeight / window.innerWidth < BOARD_HEIGHT / (this.board_array.length * BOARD_LENGTH + (this.board_array.length - 1) * BOARD_SPACING)) // Limited by screen height.
@@ -191,11 +192,11 @@ Game.prototype.get_board_coordinates = function(player) {
 		var box_height = box_length / BOARD_LENGTH * BOARD_HEIGHT;
 	}
 	
-	// Return JSON object containing proper canvas coordinates to draw board.
+	// Return object containing proper canvas coordinates to draw board.
 	return {
-		"left": (center.x - (this.board_array.length * box_length + (this.board_array.length - 1) * box_length * BOARD_SPACING / BOARD_LENGTH) / 2)
+		"left": (centerX - (this.board_array.length * box_length + (this.board_array.length - 1) * box_length * BOARD_SPACING / BOARD_LENGTH) / 2)
 		      + (player * (box_length + box_length * BOARD_SPACING / BOARD_LENGTH)),
-		"top" : center.y - box_height / 2,
+		"top" : centerY - box_height / 2,
 		"length" : box_length,
 		"height" : box_height
 	};
@@ -231,8 +232,8 @@ Game.prototype.keydown_handler = function(key, meaning) {
 		else if (splitAgain[1] === "down") {board.downInput();}
 		else if (splitAgain[1] === "left") {board.leftInput();}
 		else if (splitAgain[1] === "right") {board.rightInput();}
-		else if (splitAgain[1] === "a") {board.switchInput();}
-		else if (splitAgain[1] === "b") {board.switchInput();}
+		else if (splitAgain[1] === "a") {board.swapInput();}
+		else if (splitAgain[1] === "b") {board.swapInput();}
 		else if (splitAgain[1] === "c") {board.raiseInput();}
 	}
 }
@@ -250,6 +251,8 @@ Game.prototype.keyup_handler = function(key, meaning) {
  */
 
 Game.prototype.update = function(dt) {
+
+	// For...in doesnt work?????
 
 	for (var i = 0; i < this.board_array.length; i++) {
 		this.board_array[i].update(dt);

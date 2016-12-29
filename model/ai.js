@@ -46,7 +46,7 @@ Ai.prototype.move = function() {
 			this.board.rightInput();
 			break;
 		case "switch":
-			this.board.switchInput();
+			this.board.swapInput();
 			break;
 		case "raise":
 			this.board.raiseInput();
@@ -64,7 +64,7 @@ Ai.prototype.get_instructions = function() {
 		}
 	}
 
-	var target_x = Math.floor(Math.random() * (BOARD_LENGTH-2));
+	var target_x = Math.floor(Math.random() * (BOARD_LENGTH-1));
 	var target_y = Math.floor(Math.random() * (BOARD_HEIGHT-1));
 
 	for (var x = this.board.cursor.x; x < target_x; x++) {
